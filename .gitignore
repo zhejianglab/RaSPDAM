@@ -1,0 +1,8 @@
+
+fits
+.idea
+__pycache__
+model
+data/*
+training_data
+venv
