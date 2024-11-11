@@ -54,12 +54,17 @@ Since its deployment, RaSPDAM has been instrumental in identifying:
 
 ___
 
-## Usage:
-```python
-python slice_detection.py script_name.py <fits_file> [-m <model_path>] [-o <output_path>] [-sigmoid_threshold <value>] [-box_fill_threshold <value>] [-box_projection_threshold <value>]
+# Usage:
+## Install Requirements
+```shell
+pip install -r requirements.txt
 ```
 
-## Arguments
+## Run the Script
+```shell
+python slice_detection.py script_name.py <fits_file> [-m <model_path>] [-o <output_path>] [-sigmoid_threshold <value>] [-box_fill_threshold <value>] [-box_projection_threshold <value>]
+```
+### Arguments：
 - **fits_file**: The path to the FITS file to be processed (required).
 - **-m, -model_path**: The path to the model file (optional, default: models).
 - **-o, -output_path**: The path to save the output file (optional, default: current directory).
