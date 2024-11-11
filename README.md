@@ -1,4 +1,5 @@
 # RaSPDAM
+
 ## Introduction
 **RaSPDAM** (**Ra**dio **S**ingle-**P**ulse **D**etection **A**lgorithm Based on Visual **M**orphological Features) is a novel machine learning algorithm specifically designed for the detection of Fast Radio Bursts (FRBs). Developed to address the computational and time challenges associated with traditional FRB search methods, RaSPDAM offers significant improvements in both efficiency and accuracy.
 
@@ -6,10 +7,7 @@
 Fast Radio Bursts (FRBs) are brief, intense pulses of radio energy originating from distant galaxies. Their discovery and study are crucial for understanding the distribution and evolution of matter in the universe. However, the detection of FRBs is a challenging task due to the vast amounts of data produced by radio telescopes and the computational complexity of existing search methods. Traditional techniques often struggle with detecting weak signals and are time-consuming.
 
 ## Methodology
-
-
 ### Pre-processing
-
 <div align="center">
   <img src="/pics/image_process.png" alt="Figure1" width="500">
   <p>Figure 1. Signal Preprocessing & Enhancement</p>
@@ -25,6 +23,7 @@ The preprocessing pipeline begins by converting the original signal sequence int
 
 RaSPDAM utilizes a U-Net architecture, a convolutional neural network (CNN) designed for image segmentation tasks. This U-Net model comprises an encoder that extracts slope-based features from the input image and a decoder that reconstructs the image using these features. Despite this process, some noise may still remain in the output, so we apply additional filtering steps to identify potential FRB signals. Using the "regionprops" function, we analyze connected regions in the segmented image and calculate each candidate's projections on the x- and y-axes. Candidates exceeding defined thresholds on both axes are flagged as potential FRB signals.
 
+For more details, please refer to the [paper](https://arxiv.org/abs/2411.02859).
 
 ## Dataset
 The testing of RaSPDAM is facilitated by the **FAST-FREX** dataset, which is built upon observations obtained by the Five-hundred-meter Aperture Spherical radio Telescope (FAST). The dataset consists of:
@@ -52,3 +51,16 @@ Comparison with Traditional Methods
 Since its deployment, RaSPDAM has been instrumental in identifying:
 - 2 new FRBs: FRB20211103A and FRB20230104.
 - 80 pulsars: Including 13 previously undiscovered pulsars, highlighting the algorithm's efficacy in uncovering new celestial objects.
+
+___
+
+## Usage:
+```python slice_detection.py script_name.py <fits_file> [-m <model_path>] [-o <output_path>] [-sigmoid_threshold <value>] [-box_fill_threshold <value>] [-box_projection_threshold <value>]```
+
+## Arguments
+- **fits_file**: The path to the FITS file to be processed (required).
+- **-m, -model_path**: The path to the model file (optional, default: models).
+- **-o, -output_path**: The path to save the output file (optional, default: current directory).
+- **-sigmoid_threshold**: Threshold value for the sigmoid activation function (optional, default: 0.5).
+- **-box_fill_threshold**: Minimum percentage threshold for the area filled within each bounding box (optional, default: 0.25).
+- **-box_projection_threshold**: Minimum projection percentage threshold for bounding box filtering (optional, default: 0.15).
