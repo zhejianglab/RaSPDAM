@@ -56,7 +56,7 @@ ___
 
 ## Usage:
 ```python
-slice_detection.py script_name.py <fits_file> [-m <model_path>] [-o <output_path>] [-sigmoid_threshold <value>] [-box_fill_threshold <value>] [-box_projection_threshold <value>]
+python slice_detection.py script_name.py <fits_file> [-m <model_path>] [-o <output_path>] [-sigmoid_threshold <value>] [-box_fill_threshold <value>] [-box_projection_threshold <value>]
 ```
 
 ## Arguments
