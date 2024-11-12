@@ -26,7 +26,7 @@ RaSPDAM utilizes a U-Net architecture, a convolutional neural network (CNN) desi
 For more details, please refer to the [paper](https://arxiv.org/abs/2411.02859).
 
 ## Dataset
-The testing of RaSPDAM is facilitated by the **FAST-FREX** dataset, which is built upon observations obtained by the Five-hundred-meter Aperture Spherical radio Telescope (FAST). The dataset consists of:
+The testing of RaSPDAM is facilitated by the **[FAST-FREX](https://www.scidb.cn/en/detail?dataSetId=3b3cf2f75a74419b89a56cc9626af2a0)** dataset, which is built upon observations obtained by the Five-hundred-meter Aperture Spherical radio Telescope (FAST). The dataset consists of:
 
 - 600 positive samples: Observed FRB signals from three sources (FRB20121102, FRB20180301, and FRB20201124).
 - 1000 negative samples: Noise and Radio Frequency Interference (RFI).
