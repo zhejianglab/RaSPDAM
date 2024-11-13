@@ -62,7 +62,7 @@ pip install -r requirements.txt
 
 ## Run the Script
 ```shell
-python slice_detection.py script_name.py <fits_file> [-m <model_path>] [-o <output_path>] [-sigmoid_threshold <value>] [-box_fill_threshold <value>] [-box_projection_threshold <value>]
+python raspdam.py <fits_file> [-m <model_path>] [-o <output_path>] [-sigmoid_threshold <value>] [-box_fill_threshold <value>] [-box_projection_threshold <value>]
 ```
 ### Arguments：
 - **fits_file**: The path to the FITS file to be processed (required).
