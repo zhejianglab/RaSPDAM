@@ -1,10 +1,9 @@
 import math
 
-import numpy as np
 from skimage import measure
 
 
-def calc_dm(pure_slope_image: np.ndarray, start_time: float, end_time: float, freq_list: list) -> dict:
+def calc_dm(pure_slope_image, start_time, end_time, freq_list, pbar):
     # 再次连通区域分析，用面积最大的区域做计算
     labels = measure.label(pure_slope_image, connectivity=2)
     props = measure.regionprops(labels, intensity_image=None)
@@ -41,7 +40,7 @@ def calc_dm(pure_slope_image: np.ndarray, start_time: float, end_time: float, fr
 
     dm = 2.41 * math.pow(10, -4) * delta_t * math.pow((1 / math.pow(freq2, 2)) - (1 / math.pow(freq1, 2)), -1)
 
-    print("t1: {}, t2: {}, freq1: {}, freq2: {}, dm: {}".format(t1, t2, freq1, freq2, dm))
+    pbar.write("\nt1: {}, t2: {}, freq1: {}, freq2: {}, dm: {}".format(t1, t2, freq1, freq2, dm))
 
     return {
         "box": (y_a, x_a, y_b, x_b),

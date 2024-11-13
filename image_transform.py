@@ -4,10 +4,8 @@ from typing import List
 
 import numpy as np
 import matplotlib.pyplot as plt
-# from numba import jit
-from skimage.measure._regionprops import RegionProperties
-import cv2
-from skimage import measure, color
+from skimage import measure, color, morphology
+from scipy.signal import convolve2d
 
 from params import SDParams
 
@@ -62,6 +60,26 @@ def draw_list(img_list):
 def draw_single(img):
     plt.imshow(img)
     plt.show()
+
+
+def draw_single_file(img, time_1, time_2):
+    plt.imshow(img)
+    plt.savefig("{}_{}.png".format(time_1, time_2))
+
+
+def draw_list_file(img_list, label):
+    img_num = len(img_list)
+    fig, ax_list = plt.subplots(nrows=1, ncols=img_num, figsize=(8, 4))
+
+    for i in range(len(img_list)):
+        img = img_list[i]
+        ax = ax_list[i]
+
+        ax.imshow(img)
+        ax.set_title("IMG: {}".format(i), fontsize=20)
+
+    fig.tight_layout()
+    plt.savefig("tmp/{}.png".format(label))
 
 
 def norm(x):
@@ -151,7 +169,7 @@ def ft_set(res):
 
             # 切片 卷积 叠加
             rest[split * tem:(split + 1) * tem] += np.abs(
-                cv2.filter2D(res[split * tem:(split + 1) * tem], -1, kernel=ker)
+                convolve2d(res[split * tem:(split + 1) * tem], ker, mode='same', boundary='symm')
             )
 
         split += 1
@@ -173,19 +191,17 @@ def image_stack(origin_image):
 
     # 形态学膨胀图
     kernel = np.ones((3, 3), np.uint8)
-    img2 = cv2.dilate(img1, kernel, iterations=1)
+    img2 = morphology.dilation(img1, kernel)
+    # img2 = cv2.dilate(img1, kernel, iterations=1)
 
     img0, img1, img2 = origin_image * 255, img1 * 255, img2 * 255
 
     # 堆叠
-    img = np.stack((img0, img1, img2), 0)
+    img = np.stack(([img0], [img1], [img2]), 0)
     img = img.astype(np.float32)
 
-    img /= 255
-
-    img_new = np.stack((img0, img1, img2), 2)
-    img_new /= 255
-
+    # img /= 255
+    #
     # img_show = np.stack((img0, img1, img2), 2)
     # img_show = img_show.astype(np.float32)
     #
@@ -196,7 +212,7 @@ def image_stack(origin_image):
     return img
 
 
-def filter_rectangle_area(prop: RegionProperties, params: SDParams) -> bool:
+def filter_rectangle_area(prop, params) -> bool:
     """
     按照面积比率过滤
     """
@@ -207,7 +223,7 @@ def filter_rectangle_area(prop: RegionProperties, params: SDParams) -> bool:
     return False
 
 
-def filter_line_gradient(prop: RegionProperties) -> bool:
+def filter_line_gradient(prop) -> bool:
     """
     按照直线斜率过滤
     """
@@ -218,7 +234,7 @@ def filter_line_gradient(prop: RegionProperties) -> bool:
 
 
 def filter_total_height_and_weight(
-        slope_candidates: List[tuple[float, float, float, float]],
+        slope_candidates: List,
         width: float,
         height: float,
         params: SDParams
@@ -250,12 +266,14 @@ def analyze_shape(predict_img: np.ndarray, params: SDParams):
     slope_candidates = []
     for prop in props:
         if filter_rectangle_area(prop, params):
+            # print("Filtered by box_fill_threshold")
             continue
         # if filter_line_gradient(prop):
         #     continue
         slope_candidates.append(prop.bbox)
 
     if filter_total_height_and_weight(slope_candidates, width, height, params):
+        # print("Filtered by projection_threshold")
         return []
 
     return slope_candidates
@@ -335,6 +353,7 @@ def concat_image(
     new_image[y_a:y_b, x_a + offset_start:x_b + offset_start] = image[y_a:y_b, x_a:x_b]
 
     return new_image
+
 
 def _cmp_func(a, b):
     if a[4] != b[4]:

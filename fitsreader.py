@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import math
 import time
 import numpy as np
 from decimal import Decimal
@@ -11,49 +12,11 @@ secperday = 3600 * 24
 class FitsReader:
     def __init__(self, file):
         self.filename = file
-
-    def readFAST(self):
-        """
-        Help:
-        self.filename
-        self.device
-        self.dm
-        self.fits
-        self.data1
-        self.chan_freqs
-        self.dat_scl
-        self.nline
-        self.nsblk
-        self.tbin
-        self.npol
-        self.nsuboffs
-        self.tsamp
-        self.chan_bw
-        self.freq
-        self.nchan
-        self.obsbw
-        self.telescope
-        self.backend
-        self.nbits
-        self.poln_order
-        self.beam
-        self.STT_IMJD
-        self.STT_SMJD
-        self.STT_OFFS
-        self.tstart
-
-        self.ra_deg
-        self.dec_deg
-        self.track_mode
-        """
-
-        filename = self.filename
         self.device = 0
         self.dm = None
-        self.fits = pyfits.open(filename, mode="readonly", memmap=True, lazy_load_hdus=True)
+        self.fits = pyfits.open(file, mode="readonly", memmap=True, lazy_load_hdus=True)
         hdu0 = self.fits[0]
         hdu1 = self.fits[1]
-        # data0 = hdu0.data
         data1 = hdu1.data
         header0 = hdu0.header
         header1 = hdu1.header
@@ -89,21 +52,51 @@ class FitsReader:
         self.dec = loc.dec.to_string(unit=units.degree, sep=':')
         self.track_mode = header0['TRK_MODE']
 
-        return self
+        # FITS文件总时长(seconds)
+        self.total_time_seconds = self.nline * self.nsblk * self.tsamp
+        x, y, _, _, _ = hdu1.data['DATA'].shape
+        self.resolution_per_second = int(round(x * y / self.total_time_seconds))
 
-    def getdata(self):
+    def read_data(self, start_time, end_time):
+        delta_time = end_time - start_time
         hdu1 = self.fits[1]
 
-        a, b, c, d, e = hdu1.data['DATA'].shape
+        # x,y 维度需要合并, c为偏振，d为频率，默认4096
+        x, y, c, d, _ = hdu1.data['DATA'].shape
+        # 最后一维数据一般为空
+        fits_data = hdu1.data['DATA'][:, :, :, :, 0]
 
-        numChannel = 4096
+        start_y = int((self.resolution_per_second * start_time) % y)
+        start_x = int(math.floor((self.resolution_per_second * start_time) / y))
+
+        offset_y = int((self.resolution_per_second * delta_time) % y)
+        offset_x = int(math.floor((self.resolution_per_second * delta_time) / y))
+
+        delta_data = fits_data[start_x:start_x + offset_x + 1, :, :, :]
+
         if c > 1:
-            dataPol0 = hdu1.data['DATA'][:, :, 0, :, :].squeeze().reshape((-1, numChannel))
-            dataPol1 = hdu1.data['DATA'][:, :, 1, :, :].squeeze().reshape((-1, numChannel))
-            Scale = np.mean(dataPol0) / np.mean(dataPol1)
-            return (dataPol0 + Scale * dataPol1) / 2.
+            # 有偏振情况下，取均值
+            delta_data = np.average(delta_data, axis=2)
+        else:
+            delta_data = delta_data[:, :, 0, :]
 
-        return hdu1.data['DATA'].squeeze().reshape((-1, numChannel))
+        reshape_delta_data = delta_data.reshape(-1, d)
+
+        return reshape_delta_data[start_y:offset_y - y, :]
+
+    # def getdata(self):
+    #     hdu1 = self.fits[1]
+    #
+    #     a, b, c, d, e = hdu1.data['DATA'].shape
+    #
+    #     numChannel = 4096
+    #     if c > 1:
+    #         dataPol0 = hdu1.data['DATA'][:, :, 0, :, :].squeeze().reshape((-1, numChannel))
+    #         dataPol1 = hdu1.data['DATA'][:, :, 1, :, :].squeeze().reshape((-1, numChannel))
+    #         Scale = np.mean(dataPol0) / np.mean(dataPol1)
+    #         return (dataPol0 + Scale * dataPol1) / 2.
+    #
+    #     return hdu1.data['DATA'].squeeze().reshape((-1, numChannel))
 
     def close(self):
         self.fits.close()

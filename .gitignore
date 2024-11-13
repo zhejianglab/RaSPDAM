@@ -1,8 +1,11 @@
 
+.DS_Store
 fits
 .idea
 __pycache__
-model
+models
 data/*
 training_data
 venv
+analyze
+models.zip
