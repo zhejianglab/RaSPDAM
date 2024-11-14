@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from skimage import measure, color, morphology
 from scipy.signal import convolve2d
 
-from params import SDParams
+from utils.params import SDParams
 
 # 通用卷积核斜率
 secant = [1.3125, 1.09375, 0.9375, 0.78125, 0.671875, 0.59375, 0.515625, 0.4603174603174603]

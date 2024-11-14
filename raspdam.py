@@ -6,13 +6,12 @@ import time
 
 import numpy as np
 
-from analyzer import calc_dm
-from fitsreader import FitsReader
-from image_transform import analyze_shape, image_resize, image_stack, draw_single, draw_double, draw_single_file, \
-    draw_list_file
+from utils.analyzer import calc_dm
+from utils.fitsreader import FitsReader
+from utils.image_transform import analyze_shape, image_resize, image_stack
 import argparse
 
-from params import SDParams, DEFAULT_SIGMOID_THRESHOLD, DEFAULT_OUTPUT_PATH, DEFAULT_MODEL_PATH, \
+from utils.params import SDParams, DEFAULT_SIGMOID_THRESHOLD, DEFAULT_OUTPUT_PATH, DEFAULT_MODEL_PATH, \
     DEFAULT_BOX_FILL_PERCENT_THRESHOLD, \
     DEFAULT_TIME_WINDOW_SIZE, DEFAULT_PROJECTION_PERCENT_THRESHOLD
 
@@ -196,7 +195,7 @@ def handle_candidate(predictor, params, freq_list, time_slice, pbar):
     # )
 
 
-class SlopeDetection:
+class RaSPDAM:
 
     def __init__(self, params: SDParams) -> None:
         self.params = params
@@ -374,6 +373,6 @@ if __name__ == '__main__':
         opt.time_window_size
     )
 
-    t = SlopeDetection(params)
+    t = RaSPDAM(params)
 
     t.detect(opt.fits_file)
