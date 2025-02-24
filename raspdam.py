@@ -11,9 +11,9 @@ from utils.analyzer import calc_dm, non_max_overlap_suppression
 from utils.fitsreader import FitsReader
 from utils.image_transform import analyze_shape, image_resize, image_stack
 
-from utils.params import SDParams, DEFAULT_SIGMOID_THRESHOLD, DEFAULT_OUTPUT_PATH, DEFAULT_MODEL_PATH, \
-    DEFAULT_BOX_FILL_PERCENT_THRESHOLD, \
-    DEFAULT_TIME_WINDOW_SIZE, DEFAULT_PROJECTION_PERCENT_THRESHOLD, DEFAULT_IOU_THRESHOLD, DEFAULT_OVERLAP_THRESHOLD
+from utils.params import SDParams, DEFAULT_OUTPUT_PATH, DEFAULT_MODEL_PATH, \
+    DEFAULT_IOU_THRESHOLD, DEFAULT_OVERLAP_THRESHOLD, DEFAULT_BOX_FILL_PERCENT_THRESHOLD, \
+    DEFAULT_TIME_WINDOW_SIZE, DEFAULT_PROJECTION_PERCENT_THRESHOLD
 
 import matplotlib.pyplot as plt
 import torch
@@ -367,11 +367,6 @@ if __name__ == '__main__':
     )
 
     parser.add_argument(
-        "-sigmoid_threshold", type=float,
-        default=DEFAULT_SIGMOID_THRESHOLD
-    )
-
-    parser.add_argument(
         "-box_fill_threshold", type=float,
         default=DEFAULT_BOX_FILL_PERCENT_THRESHOLD
     )
@@ -401,10 +396,9 @@ if __name__ == '__main__':
     params = SDParams(
         opt.m,
         opt.o,
-        opt.sigmoid_threshold,
-        opt.box_fill_threshold,
         opt.iou_threshold,
         opt.overlap_threshold,
+        opt.box_fill_threshold,
         opt.box_projection_threshold,
         opt.time_window_size
     )

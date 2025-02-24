@@ -60,19 +60,19 @@ ___
 # Usage:
 ## Training
 ### Generate Training Data
-The following command can be used to generate training data in the running directory. Replace `{RaSPDAM_PATH}` with the actual path to the RaSPDAM directory.
+The following command can be used to generate training data in the running directory. Replace `{RaSPDAM_PATH}` with the actual path to the RaSPDAM directory. You can change the training data generation parameters in `{RaSPDAM_PATH}/utils/traning_data_gen.py`.
 ```shell
 python {RaSPDAM_PATH}/utils/traning_data_gen.py
 ```
 ### Train the Model
 Follow the instructions of nnUNet to train the model, refer to [nnUNet](https://github.com/MIC-DKFZ/nnUNet).
-- Create the `nnUNet_raw/DatasetXXX_Name` directory and place the generated training data in it.
+- Create the `nnUNet_raw/{DatasetXXX_Name}` directory, place the generated training data and `{RaSPDAM_PATH}/models/dataset.json` in it, change the numTraining in json file. 
 - Run `nnUNetv2_plan_and_preprocess` to generate the necessary preprocessing files.
 - Run `nnUNetv2_train` to train the model. For FOLD in [0, 1, 2, 3, 4], run:
 ``` shell
-nnUNetv2_train DATASET_NAME_OR_ID 2d FOLD [--npz]
+nnUNetv2_train {DATASET_NAME_OR_ID} 2d {FOLD} --npz
 ```
-- Copy the corresponding trained model to the `{RaSPDAM_PATH}/models/fold_FOLD/` directory.
+- Copy the corresponding trained model `nnUNet_results/{DatasetXXX_Name}/nnUNetTrainer__nnUNetPlans__2d/` to the `{RaSPDAM_PATH}/models/` directory.
 
 
 ## Install Requirements
@@ -82,12 +82,13 @@ pip install -r requirements.txt
 
 ## Run the Script
 ```shell
-python raspdam.py <fits_file> [-m <model_path>] [-o <output_path>] [-sigmoid_threshold <value>] [-box_fill_threshold <value>] [-box_projection_threshold <value>]
+python raspdam.py <fits_file> [-m <model_path>] [-o <output_path>] [-iou_theshold <value>] [-overlap_threshold <value>] [-box_fill_threshold <value>] [-box_projection_threshold <value>]
 ```
 ### Arguments：
 - **fits_file**: The path to the FITS file to be processed (required).
 - **-m, -model_path**: The path to the model file (optional, default: models).
 - **-o, -output_path**: The path to save the output file (optional, default: current directory).
-- **-sigmoid_threshold**: Threshold value for the sigmoid activation function (optional, default: 0.5).
+- **-iou_threshold**: Minimum IoU threshold for bounding box filtering (optional, default: 0.5).
+- **-overlap_threshold**: Minimum overlap threshold for bounding box filtering (optional, default: 0.5).
 - **-box_fill_threshold**: Minimum percentage threshold for the area filled within each bounding box (optional, default: 0.25).
 - **-box_projection_threshold**: Minimum projection percentage threshold for bounding box filtering (optional, default: 0.15).
