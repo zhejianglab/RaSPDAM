@@ -1,3 +1,4 @@
+import argparse
 import math
 import os
 import queue
@@ -6,14 +7,13 @@ import time
 
 import numpy as np
 
-from utils.analyzer import calc_dm
+from utils.analyzer import calc_dm, non_max_overlap_suppression
 from utils.fitsreader import FitsReader
 from utils.image_transform import analyze_shape, image_resize, image_stack
-import argparse
 
 from utils.params import SDParams, DEFAULT_SIGMOID_THRESHOLD, DEFAULT_OUTPUT_PATH, DEFAULT_MODEL_PATH, \
     DEFAULT_BOX_FILL_PERCENT_THRESHOLD, \
-    DEFAULT_TIME_WINDOW_SIZE, DEFAULT_PROJECTION_PERCENT_THRESHOLD
+    DEFAULT_TIME_WINDOW_SIZE, DEFAULT_PROJECTION_PERCENT_THRESHOLD, DEFAULT_IOU_THRESHOLD, DEFAULT_OVERLAP_THRESHOLD
 
 import matplotlib.pyplot as plt
 import torch
@@ -53,7 +53,7 @@ def draw_result_image(output_path, file_name, origin_image, enhanced_image, dm_c
 
     height, width = origin_image_with_box.shape
 
-    toa = dm_calc_result["t1"]
+    toa = dm_calc_result["toa"]
     dm = dm_calc_result["dm"]
     window_start = dm_calc_result["t_start"]
     window_end = dm_calc_result["t_end"]
@@ -124,6 +124,15 @@ def drawing_handle(q):
         )
         q.task_done()
 
+def normalize_box(calc_result):
+    x_min = calc_result["t1"]
+    x_max = calc_result["t2"]
+    y_min = calc_result["freq2"]
+    y_max = calc_result["freq1"]
+    # 确保 x_min <= x_max 和 y_min <= y_max
+    x_min, x_max = min(x_min, x_max), max(x_min, x_max)
+    y_min, y_max = min(y_min, y_max), max(y_min, y_max)
+    return [x_min, y_min, x_max, y_max]
 
 def segment_pool_handle(predictor, seg_q, drawing_q, params):
     while True:
@@ -131,12 +140,25 @@ def segment_pool_handle(predictor, seg_q, drawing_q, params):
         if not item:
             return
 
-        fit_file_name, freq_list, fits_reader, time_slice, pbar, time_window_step = item
-        calc_result = handle_candidate(predictor, params, freq_list, time_slice, pbar)
+        calc_results = []
+        fit_file_name, freq_list, fits_reader, time_slices, pbar, time_window_step = item
+        for time_slice in time_slices:
+            calc_result = handle_candidate(predictor, params, freq_list, time_slice, pbar)
+            pbar.update(time_window_step)
+            if calc_result:
+                calc_results.append((calc_result, time_slice))
 
-        pbar.update(time_window_step)
+        boxes = np.array([normalize_box(calc_result) for calc_result, time_slice in calc_results], dtype=np.float32)
+        scores = np.array([calc_result["score"] for calc_result, time_slice in calc_results], dtype=np.float32)
 
-        if calc_result:
+        print("boxes: {}, scores: {}".format(boxes, scores))
+        indices = non_max_overlap_suppression(boxes, scores, params.iou_threshold, params.overlap_threshold)
+        # 过滤后的框
+        #indices = indices.flatten()
+        print("indices: {}".format(indices))
+        filtered_calc_results = [calc_results[i] for i in indices]
+
+        for calc_result, time_slice in filtered_calc_results:
             drawing_q.put((
                 params.output_path,
                 fit_file_name,
@@ -253,6 +275,7 @@ class RaSPDAM:
             sliding_window_end = int(math.ceil(total_time_seconds))
             pbar = tqdm(total=sliding_window_end, desc=fit_file_name)
 
+            time_slices = []
             for i in range(0, sliding_window_end, time_window_step):
                 # 按窗口读取部分数据
                 image_data = fits.read_data(i, i + time_window_size)
@@ -279,8 +302,9 @@ class RaSPDAM:
                     start_time,
                     end_time,
                 )
+                time_slices.append(time_slice)
 
-                segment_q.put((fit_file_name, freq_list, fits, time_slice, pbar, time_window_step))
+            segment_q.put((fit_file_name, freq_list, fits, time_slices, pbar, time_window_step))
 
         segment_q.join()
         segment_q.put(None)
@@ -353,6 +377,16 @@ if __name__ == '__main__':
     )
 
     parser.add_argument(
+        "-iou_threshold", type=float,
+        default=DEFAULT_IOU_THRESHOLD
+    )
+
+    parser.add_argument(
+        "-overlap_threshold", type=float,
+        default=DEFAULT_OVERLAP_THRESHOLD
+    )
+
+    parser.add_argument(
         "-box_projection_threshold", type=float,
         default=DEFAULT_PROJECTION_PERCENT_THRESHOLD
     )
@@ -369,6 +403,8 @@ if __name__ == '__main__':
         opt.o,
         opt.sigmoid_threshold,
         opt.box_fill_threshold,
+        opt.iou_threshold,
+        opt.overlap_threshold,
         opt.box_projection_threshold,
         opt.time_window_size
     )

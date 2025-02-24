@@ -224,31 +224,22 @@ def frb_gen_inner(count):
 
     res_set = [flat(res1), flat(res2), flat(res3)]
     for tem_res in range(len(res_set)):
-        # for sub in ["0000", "0001", "0002"]:
-        #     img = res_set[tem_res]
-        #     if sub == "0001":
-        #         img = ft_set(res_set[tem_res])
-        #     elif sub == "0002":
-        #         img = cv2.dilate(res_set[tem_res], kernel, iterations=1)
-        #
-        #     file_name = os.path.join(
-        #         path_all[1],
-        #         "FRB_{}_{}.png".format("%04d" % (count * 3 + tem_res), sub)
-        #     )
-        #
-        #     cv2.imwrite(file_name, img * 255)
-        img = ft_set(res_set[tem_res])
-        img = cv2.dilate(img, kernel, iterations=1)
+        for sub in ["0000", "0001", "0002"]:
+            img = res_set[tem_res]
+            if sub == "0001":
+                img = ft_set(res_set[tem_res])
+            elif sub == "0002":
+                img = cv2.dilate(res_set[tem_res], kernel, iterations=1)
 
-        file_name = os.path.join(
-            path_all[1],
-            "FRB_{}_0000.png".format("%04d" % (count * 3 + tem_res))
-        )
+            file_name = os.path.join(
+                path_all[1],
+                "FRB_{}_{}.png".format("%04d" % (count * 3 + tem_res), sub)
+            )
 
-        cv2.imwrite(file_name, img * 255)
+            cv2.imwrite(file_name, img * 255)
 
 
-def frb_gen():
+def frb_gen(sample_num, thread_num):
     # 生成FRB信号曲线的斜率，并储存至secant
     #    global secant
     #    cut_num = 8
@@ -259,9 +250,9 @@ def frb_gen():
     #        secant.append(dy / dx)
 
     futures = []
-    with ThreadPoolExecutor(max_workers=2) as pool:
+    with ThreadPoolExecutor(max_workers=thread_num) as pool:
         # 3333*3=9999  生成样本数量
-        sample_count = 10
+        sample_count = sample_num
 
         with tqdm(total=sample_count) as pbar:
             for count in range(sample_count):
@@ -271,4 +262,5 @@ def frb_gen():
                 pbar.update(1)
 
 
-frb_gen()
+if __name__ == '__main__':
+    frb_gen(3, 2)

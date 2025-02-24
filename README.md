@@ -23,6 +23,8 @@ The preprocessing pipeline begins by converting the original signal sequence int
 
 RaSPDAM utilizes a U-Net architecture, a convolutional neural network (CNN) designed for image segmentation tasks. This U-Net model comprises an encoder that extracts slope-based features from the input image and a decoder that reconstructs the image using these features. Despite this process, some noise may still remain in the output, so we apply additional filtering steps to identify potential FRB signals. Using the "regionprops" function, we analyze connected regions in the segmented image and calculate each candidate's projections on the x- and y-axes. Candidates exceeding defined thresholds on both axes are flagged as potential FRB signals.
 
+We have upgraded the model to use nnUNet, aligning it with NMS (Non-Maximum Suppression) and overlapping suppression techniques, in order to enhance performance.
+
 For more details, please refer to the [paper](https://arxiv.org/abs/2411.02859).
 
 ## Dataset
@@ -33,9 +35,9 @@ The testing of RaSPDAM is facilitated by the **[FAST-FREX](https://www.scidb.cn/
 
 ## Key Features
 ### Efficiency and Accuracy
-- High Precision: RaSPDAM achieves a precision of 98.73%, significantly outperforming traditional methods like PRESTO and Heimdall.
-- High Recall: With a recall rate of 77.67%, RaSPDAM effectively identifies a large proportion of true FRB signals.
-- F1 Score: An F1 score of 0.8694 indicates a well-balanced trade-off between precision and recall.
+- High Precision: RaSPDAM achieves a precision of 97.28%, significantly outperforming traditional methods like PRESTO and Heimdall.
+- High Recall: With a recall rate of 83.50%, RaSPDAM effectively identifies a large proportion of true FRB signals.
+- F1 Score: An F1 score of 0.9253 indicates a well-balanced trade-off between precision and recall.
 ### Versatility
 - ToA and DM: While RaSPDAM currently provides Time of Arrival (ToA) as a result, future enhancements aim to include Dispersion Measure (DM) for more comprehensive signal verification.
 
@@ -45,7 +47,8 @@ Comparison with Traditional Methods
 |---------|---|---|---|---|-------|-----------|--------|
 |PRESTO |3|472|0|26963700|0.7867|1.7505E-05|3.5009E-05|
 |Heimdall|218|489|36|5854|0.8150|0.0771|0.1409|
-|RaSPDAM|989|466|128|6|0.7767|0.9873|0.8694|
+|RaSPDAMv1(UNet)|989|466|128|6|0.7767|0.9873|0.8694|
+|RaSPDAMv2(nnUNet)|994|501|67|14|0.8350|0.9728|0.9253|
 
 ## Discoveries
 Since its deployment, RaSPDAM has been instrumental in identifying:
@@ -55,6 +58,23 @@ Since its deployment, RaSPDAM has been instrumental in identifying:
 ___
 
 # Usage:
+## Training
+### Generate Training Data
+The following command can be used to generate training data in the running directory. Replace `{RaSPDAM_PATH}` with the actual path to the RaSPDAM directory.
+```shell
+python {RaSPDAM_PATH}/utils/traning_data_gen.py
+```
+### Train the Model
+Follow the instructions of nnUNet to train the model, refer to [nnUNet](https://github.com/MIC-DKFZ/nnUNet).
+- Create the `nnUNet_raw/DatasetXXX_Name` directory and place the generated training data in it.
+- Run `nnUNetv2_plan_and_preprocess` to generate the necessary preprocessing files.
+- Run `nnUNetv2_train` to train the model. For FOLD in [0, 1, 2, 3, 4], run:
+``` shell
+nnUNetv2_train DATASET_NAME_OR_ID 2d FOLD [--npz]
+```
+- Copy the corresponding trained model to the `{RaSPDAM_PATH}/models/fold_FOLD/` directory.
+
+
 ## Install Requirements
 ```shell
 pip install -r requirements.txt
