@@ -164,11 +164,7 @@ def segment_pool_handle(predictor, seg_q, drawing_q, candidate_pool, lock, param
             if len(candidate_pool[file_name]) < time_slice.total_slice:
                 continue
 
-            print("candidate_pool: {}, total_slice: {}".format(len(candidate_pool[file_name]), time_slice.total_slice))
-
             calc_results = [(calc_result, time_slice) for calc_result, time_slice in candidate_pool[file_name] if calc_result]
-
-            print("calc_results: {}".format(calc_results))
 
             if not calc_results:
                 continue
