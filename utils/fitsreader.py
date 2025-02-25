@@ -77,6 +77,11 @@ class FitsReader:
         if c > 1:
             # 有偏振情况下，取均值
             delta_data = np.average(delta_data, axis=2)
+            # polt0 = delta_data[:, :, 0, :]  # 第一路
+            # polt1 = delta_data[:, :, 1, :]
+            # avg_polt0 = np.average(polt0)
+            # avg_polt1 = np.average(polt1)
+            # delta_data = (polt0 + polt1 * avg_polt0 / avg_polt1) / 2
         else:
             delta_data = delta_data[:, :, 0, :]
 

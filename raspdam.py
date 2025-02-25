@@ -9,6 +9,7 @@ import numpy as np
 
 from utils.analyzer import calc_dm, non_max_overlap_suppression
 from utils.fitsreader import FitsReader
+from utils.filreader import FilReader
 from utils.image_transform import analyze_shape, image_resize, image_stack
 
 from utils.params import SDParams, DEFAULT_OUTPUT_PATH, DEFAULT_MODEL_PATH, \
@@ -26,14 +27,16 @@ ENABLE_CUPY = False
 
 
 class TimeSeriesSlice:
-    def __init__(self, raw_image: np.ndarray, stack_image: np.ndarray, start_time: float, end_time: float) -> None:
+    def __init__(self, raw_image: np.ndarray, stack_image: np.ndarray, start_time: float, end_time: float, nslice: int, total_slice:int) -> None:
         self.raw_image = raw_image
         self.stack_image = stack_image
         self.start_time = start_time
         self.end_time = end_time
+        self.nslice = nslice
+        self.total_slice = total_slice
 
 
-def draw_result_image(output_path, file_name, origin_image, enhanced_image, dm_calc_result, fits_data):
+def draw_result_image(output_path, file_name, origin_image, enhanced_image, dm_calc_result, obs):
     # 画白框
     origin_image_with_box = origin_image.copy() * 255
     enhanced_image_with_box = enhanced_image.copy()
@@ -92,15 +95,15 @@ def draw_result_image(output_path, file_name, origin_image, enhanced_image, dm_c
              ha='center', va='center')
 
     title_info = "time sampling: {} us, freq sampling: {} MHz".format(
-        round(fits_data.tsamp * math.pow(10, 6), 2),
-        fits_data.freq)
+        round(obs.tsamp * math.pow(10, 6), 2),
+        obs.freq)
 
     fig.text(0.5, 0.93, "time window: {} s - {} s".format(window_start, window_end), fontsize=10, ha='center',
              va='center')
 
     fig.text(0.5, 0.90, title_info, fontsize=10, ha='center', va='center')
 
-    fig.text(0.5, 0.87, "RA: {}, DEC: {}".format(fits_data.ra, fits_data.dec), fontsize=10, ha='center', va='center')
+    fig.text(0.5, 0.87, "RA: {}, DEC: {}".format(obs.ra, obs.dec), fontsize=10, ha='center', va='center')
 
     plt.savefig(result_file_path)
     plt.close()
@@ -108,21 +111,28 @@ def draw_result_image(output_path, file_name, origin_image, enhanced_image, dm_c
 
 def drawing_handle(q):
     while True:
-        item = q.get()
-        if not item:
-            return
+        try:
+            item = q.get()
+            if item is None:  # 明确的终止条件
+                return
 
-        output_path, fit_file_name, raw_image, enhanced_image, calc_result, fits_reader = item
-
-        draw_result_image(
-            output_path,
-            fit_file_name,
-            raw_image,
-            enhanced_image,
-            calc_result,
-            fits_reader
-        )
-        q.task_done()
+            try:
+                output_path, fit_file_name, raw_image, enhanced_image, calc_result, obs = item
+                draw_result_image(
+                    output_path,
+                    fit_file_name,
+                    raw_image,
+                    enhanced_image,
+                    calc_result,
+                    obs
+                )
+            except Exception as e:
+                print(f"Error processing item {item}: {e}")
+                raise  # 重新抛出异常以便外层处理
+        except Exception as e:
+            print(f"Error in drawing_handle: {e}")
+        finally:
+            q.task_done()
 
 def normalize_box(calc_result):
     x_min = calc_result["t1"]
@@ -134,41 +144,64 @@ def normalize_box(calc_result):
     y_min, y_max = min(y_min, y_max), max(y_min, y_max)
     return [x_min, y_min, x_max, y_max]
 
-def segment_pool_handle(predictor, seg_q, drawing_q, params):
-    while True:
-        item = seg_q.get()
-        if not item:
-            return
 
-        calc_results = []
-        fit_file_name, freq_list, fits_reader, time_slices, pbar, time_window_step = item
-        for time_slice in time_slices:
+def segment_pool_handle(predictor, seg_q, drawing_q, candidate_pool, lock, params):
+    while True:
+        try:
+            item = seg_q.get()
+            if item is None:
+                return
+
+            file_name, freq_list, obs, time_slice, pbar, time_window_step = item
             calc_result = handle_candidate(predictor, params, freq_list, time_slice, pbar)
             pbar.update(time_window_step)
-            if calc_result:
-                calc_results.append((calc_result, time_slice))
 
-        boxes = np.array([normalize_box(calc_result) for calc_result, time_slice in calc_results], dtype=np.float32)
-        scores = np.array([calc_result["score"] for calc_result, time_slice in calc_results], dtype=np.float32)
+            with lock:
+                if file_name not in candidate_pool:
+                    candidate_pool[file_name] = []
+                candidate_pool[file_name].append((calc_result, time_slice))
 
-        print("boxes: {}, scores: {}".format(boxes, scores))
-        indices = non_max_overlap_suppression(boxes, scores, params.iou_threshold, params.overlap_threshold)
-        # 过滤后的框
-        #indices = indices.flatten()
-        print("indices: {}".format(indices))
-        filtered_calc_results = [calc_results[i] for i in indices]
+            if len(candidate_pool[file_name]) < time_slice.total_slice:
+                continue
 
-        for calc_result, time_slice in filtered_calc_results:
-            drawing_q.put((
-                params.output_path,
-                fit_file_name,
-                time_slice.raw_image,
-                time_slice.stack_image[2][0],
-                calc_result,
-                fits_reader
-            ))
+            print("candidate_pool: {}, total_slice: {}".format(len(candidate_pool[file_name]), time_slice.total_slice))
 
-        seg_q.task_done()
+            calc_results = [(calc_result, time_slice) for calc_result, time_slice in candidate_pool[file_name] if calc_result]
+
+            print("calc_results: {}".format(calc_results))
+
+            if not calc_results:
+                continue
+
+            boxes = np.array([normalize_box(calc_result) for calc_result, time_slice in calc_results], dtype=np.float32)
+            scores = np.array([calc_result["score"] for calc_result, time_slice in calc_results], dtype=np.float32)
+
+            if len(boxes) == 0 or len(scores) == 0:
+                continue
+
+            print("boxes: {}, scores: {}".format(boxes, scores))
+            indices = non_max_overlap_suppression(boxes, scores, params.iou_threshold, params.overlap_threshold)
+            print("indices: {}".format(indices))
+            filtered_calc_results = [calc_results[i] for i in indices]
+
+            for calc_result, time_slice in filtered_calc_results:
+                try:
+                    drawing_q.put((
+                        params.output_path,
+                        file_name,
+                        time_slice.raw_image,
+                        time_slice.stack_image[2][0],
+                        calc_result,
+                        obs
+                    ))
+                except Exception as e:
+                    print(f"Error putting item into drawing_q: {e}")
+        except queue.Empty:
+            continue
+        except Exception as e:
+            print(f"Unexpected error in segment_pool_handle: {e}")
+        finally:
+            seg_q.task_done()
 
 
 def handle_candidate(predictor, params, freq_list, time_slice, pbar):
@@ -247,9 +280,19 @@ class RaSPDAM:
 
         self.device = device
         self.predictor = predictor
+        self.candidate_pool = {}
+        self.lock = threading.Lock()
 
-    def segment(self, fit_file):
-        fit_file_name = fit_file[fit_file.rfind("/") + 1:fit_file.rfind(".fits")]
+    def segment(self, file):
+        file_name, file_extension = os.path.splitext(os.path.basename(file))
+        file_extension = file_extension[1:]
+        if file_extension == "fil":
+            reader = FilReader
+        elif file_extension == "fits":
+            reader = FitsReader
+        else:
+            raise Exception("Unsupported file extension: {}".format(file_extension))
+
         segment_q = queue.Queue(maxsize=10)
         drawing_q = queue.Queue(maxsize=10)
 
@@ -259,26 +302,26 @@ class RaSPDAM:
         background_drawing_thread.start()
 
         background_thread = threading.Thread(target=segment_pool_handle,
-                                             args=[self.predictor, segment_q, drawing_q, self.params],
+                                             args=[self.predictor, segment_q, drawing_q, self.candidate_pool, self.lock, self.params],
                                              daemon=False)
         background_thread.start()
 
-        with FitsReader(fit_file) as fits:
-            freq_list = fits.chan_freqs
+        with reader(file) as obs:
+            freq_list = obs.chan_freqs
 
-            total_time_seconds = fits.total_time_seconds
+            total_time_seconds = obs.total_time_seconds
 
-            time_window_size = params.time_window_size
+            time_window_size = self.params.time_window_size
             # 每次迭代，都有一半窗口重叠
             time_window_step = int(math.floor(time_window_size / 2))
 
             sliding_window_end = int(math.ceil(total_time_seconds))
-            pbar = tqdm(total=sliding_window_end, desc=fit_file_name)
+            total_slices = int(math.ceil(total_time_seconds / time_window_step))
 
-            time_slices = []
+            pbar = tqdm(total=sliding_window_end, desc=file_name)
             for i in range(0, sliding_window_end, time_window_step):
                 # 按窗口读取部分数据
-                image_data = fits.read_data(i, i + time_window_size)
+                image_data = obs.read_data(i, i + time_window_size)
 
                 # time_start = time.time()
                 # 图像大小压缩成512*512，并卷积堆叠
@@ -301,10 +344,10 @@ class RaSPDAM:
                     stack_image,
                     start_time,
                     end_time,
+                    i,
+                    total_slices
                 )
-                time_slices.append(time_slice)
-
-            segment_q.put((fit_file_name, freq_list, fits, time_slices, pbar, time_window_step))
+                segment_q.put((file_name, freq_list, obs, time_slice, pbar, time_window_step))
 
         segment_q.join()
         segment_q.put(None)
@@ -315,30 +358,30 @@ class RaSPDAM:
 
         pbar.close()
 
-    def detect(self, fit_path):
+    def detect(self, path):
         start_time = time.time()
 
-        if not os.path.exists(fit_path):
-            print("path: {} is not a valid fits file or directory".format(fit_path))
+        if not os.path.exists(path):
+            print("path: {} is not a valid file or directory".format(path))
             exit(-1)
 
-        if os.path.isdir(fit_path):
+        if os.path.isdir(path):
             print("running in walkdir mode")
-            fit_files = []
+            obs_files = []
 
-            for root, dirs, files in os.walk(fit_path):
+            for root, dirs, files in os.walk(path):
                 for name in files:
-                    if name.endswith("fits"):
-                        fit_files.append(os.path.join(root, name))
+                    if name.endswith("fits") or name.endswith("fil"):
+                        obs_files.append(os.path.join(root, name))
 
-                for i in range(len(fit_files)):
-                    print("<{}/{}>Handling fits file: {}".format(i + 1, len(fit_files), fit_files[i]))
+                for i in range(len(obs_files)):
+                    print("<{}/{}>Handling observation file: {}".format(i + 1, len(obs_files), obs_files[i]))
 
-                    self.segment(fit_files[i])
+                    self.segment(obs_files[i])
 
         else:
             print("running in single file mode")
-            self.segment(fit_path)
+            self.segment(path)
 
         end_time = time.time()
         time_cost = round(end_time - start_time, 2)
@@ -355,7 +398,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("fits_file")
+    parser.add_argument("path")
 
     parser.add_argument(
         "-m", "-model_path", type=str,
@@ -405,4 +448,4 @@ if __name__ == '__main__':
 
     t = RaSPDAM(params)
 
-    t.detect(opt.fits_file)
+    t.detect(opt.path)
