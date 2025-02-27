@@ -10,7 +10,7 @@ import numpy as np
 from utils.analyzer import calc_dm, non_max_overlap_suppression
 from utils.fitsreader import FitsReader
 from utils.filreader import FilReader
-from utils.image_transform import analyze_shape, image_resize, image_stack
+from utils.image_transform import analyze_shape, image_resize, image_stack, draw_single_file
 
 from utils.params import SDParams, DEFAULT_OUTPUT_PATH, DEFAULT_MODEL_PATH, \
     DEFAULT_IOU_THRESHOLD, DEFAULT_OVERLAP_THRESHOLD, DEFAULT_BOX_FILL_PERCENT_THRESHOLD, \
@@ -154,7 +154,7 @@ def segment_pool_handle(predictor, seg_q, drawing_q, candidate_pool, lock, param
 
             file_name, freq_list, obs, time_slice, pbar, time_window_step = item
             calc_result = handle_candidate(predictor, params, freq_list, time_slice, pbar)
-            pbar.update(time_window_step)
+            pbar.update(1)
 
             with lock:
                 if file_name not in candidate_pool:
@@ -309,15 +309,28 @@ class RaSPDAM:
 
             time_window_size = self.params.time_window_size
             # 每次迭代，都有一半窗口重叠
-            time_window_step = int(math.floor(time_window_size / 2))
+            time_window_step = max(0.1, time_window_size / 2)  # 确保步长至少为 0.1
+            print("time_window_size: {}, time_window_step: {}".format(time_window_size, time_window_step))
 
-            sliding_window_end = int(math.ceil(total_time_seconds))
-            total_slices = int(math.ceil(total_time_seconds / time_window_step))
+            sliding_window_end = math.ceil(total_time_seconds - time_window_step)
+            print("sliding_window_end: {}".format(sliding_window_end))
+            print("time_resolution： {}".format(obs.resolution_per_second))
+            total_slices = math.floor(total_time_seconds / time_window_step)
 
-            pbar = tqdm(total=sliding_window_end, desc=file_name)
-            for i in range(0, sliding_window_end, time_window_step):
+            pbar = tqdm(total=total_slices, desc=file_name)
+            i = 0
+            while i < sliding_window_end:
+                # 确保最后一个窗口的结束位置不超过 total_time_seconds
+
+                start_time, end_time = i, i + time_window_size
+                i += time_window_step
+
+                if end_time > total_time_seconds:
+                    end_time = total_time_seconds
+                print("Processing time window: {} - {}".format(start_time, end_time))
+
                 # 按窗口读取部分数据
-                image_data = obs.read_data(i, i + time_window_size)
+                image_data = obs.read_data(start_time, end_time)
 
                 # time_start = time.time()
                 # 图像大小压缩成512*512，并卷积堆叠
@@ -325,16 +338,10 @@ class RaSPDAM:
                 stack_image = image_stack(raw_image)
                 # time_end = time.time()
 
-                # draw_list_file(
-                #     [stack_image[0][0], stack_image[1][0], stack_image[2][0]],
-                #     int(x_start / resolution_per_second)
-                # )
-
                 # print("image transformation: {} ms".format(round(time_end - time_start, 2) * 1000))
 
-                start_time, end_time = i, i + time_window_size
-                if end_time > total_time_seconds:
-                    end_time = total_time_seconds
+                draw_single_file(raw_image, start_time, end_time)
+
                 time_slice = TimeSeriesSlice(
                     raw_image,
                     stack_image,
@@ -354,30 +361,31 @@ class RaSPDAM:
 
         pbar.close()
 
-    def detect(self, path):
+    def detect(self, paths):
         start_time = time.time()
 
-        if not os.path.exists(path):
-            print("path: {} is not a valid file or directory".format(path))
-            exit(-1)
+        for path in paths:
+            if not os.path.exists(path):
+                print("path: {} is not a valid file or directory".format(path))
+                continue
 
-        if os.path.isdir(path):
-            print("running in walkdir mode")
-            obs_files = []
+            if os.path.isdir(path):
+                print("running in walkdir mode")
+                obs_files = []
 
-            for root, dirs, files in os.walk(path):
-                for name in files:
-                    if name.endswith("fits") or name.endswith("fil"):
-                        obs_files.append(os.path.join(root, name))
+                for root, dirs, files in os.walk(path):
+                    for name in files:
+                        if name.endswith("fits") or name.endswith("fil"):
+                            obs_files.append(os.path.join(root, name))
 
-                for i in range(len(obs_files)):
-                    print("<{}/{}>Handling observation file: {}".format(i + 1, len(obs_files), obs_files[i]))
+                    for i in range(len(obs_files)):
+                        print("<{}/{}>Handling observation file: {}".format(i + 1, len(obs_files), obs_files[i]))
 
-                    self.segment(obs_files[i])
+                        self.segment(obs_files[i])
 
-        else:
-            print("running in single file mode")
-            self.segment(path)
+            else:
+                print("running in single file mode")
+                self.segment(path)
 
         end_time = time.time()
         time_cost = round(end_time - start_time, 2)
@@ -394,7 +402,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("path")
+    parser.add_argument("paths", nargs='+')
 
     parser.add_argument(
         "-m", "-model_path", type=str,
@@ -426,7 +434,7 @@ if __name__ == '__main__':
     )
 
     parser.add_argument(
-        "-time_window_size", type=int,
+        "-time_window_size", type=float,
         default=DEFAULT_TIME_WINDOW_SIZE
     )
 
@@ -444,4 +452,4 @@ if __name__ == '__main__':
 
     t = RaSPDAM(params)
 
-    t.detect(opt.path)
+    t.detect(opt.paths)
