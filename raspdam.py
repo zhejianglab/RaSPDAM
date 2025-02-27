@@ -310,11 +310,11 @@ class RaSPDAM:
             time_window_size = self.params.time_window_size
             # 每次迭代，都有一半窗口重叠
             time_window_step = max(0.1, time_window_size / 2)  # 确保步长至少为 0.1
-            print("time_window_size: {}, time_window_step: {}".format(time_window_size, time_window_step))
+            # print("time_window_size: {}, time_window_step: {}".format(time_window_size, time_window_step))
 
             sliding_window_end = math.ceil(total_time_seconds - time_window_step)
-            print("sliding_window_end: {}".format(sliding_window_end))
-            print("time_resolution： {}".format(obs.resolution_per_second))
+            # print("sliding_window_end: {}".format(sliding_window_end))
+            # print("time_resolution： {}".format(obs.resolution_per_second))
             total_slices = math.floor(total_time_seconds / time_window_step)
 
             pbar = tqdm(total=total_slices, desc=file_name)
@@ -340,7 +340,7 @@ class RaSPDAM:
 
                 # print("image transformation: {} ms".format(round(time_end - time_start, 2) * 1000))
 
-                draw_single_file(raw_image, start_time, end_time)
+                # draw_single_file(raw_image, start_time, end_time)
 
                 time_slice = TimeSeriesSlice(
                     raw_image,
