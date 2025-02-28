@@ -327,7 +327,7 @@ class RaSPDAM:
 
                 if end_time > total_time_seconds:
                     end_time = total_time_seconds
-                print("Processing time window: {} - {}".format(start_time, end_time))
+                #print("Processing time window: {} - {}".format(start_time, end_time))
 
                 # 按窗口读取部分数据
                 image_data = obs.read_data(start_time, end_time)

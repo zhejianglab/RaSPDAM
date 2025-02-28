@@ -55,13 +55,12 @@ class FilReader:
         self.resolution_per_second = int(round(1 / self.tsamp))
 
     def read_data(self, start_time, end_time):
-        if end_time > self.total_time_seconds:
-            end_time = self.total_time_seconds
-
         delta_time = end_time - start_time
 
         start_sample = int(self.resolution_per_second * start_time)
         delta_sample = int(self.resolution_per_second * delta_time)
+        if delta_sample > self.nsamples - start_sample:
+            delta_sample = self.nsamples - start_sample
 
         data = self.fil.read_block(start_sample, delta_sample).data.astype(np.uint8)
         if self.foff < 0:
